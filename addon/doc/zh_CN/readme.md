@@ -5,6 +5,7 @@
 ## 目的
 
 本插件是以下功能请求的**概念验证实现**：
+- [Issue #18360](https://github.com/nvaccess/nvda/issues/18360)
 - [Issue #4874](https://github.com/nvaccess/nvda/issues/4874)
 - [Issue #12996](https://github.com/nvaccess/nvda/issues/12996)
 

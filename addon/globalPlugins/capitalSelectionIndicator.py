@@ -5,7 +5,7 @@
 
 """Capital Letter Indicators for Text Selection.
 
-A prototype NVDA add-on that addresses GitHub issues #4874 and #12996.
+A prototype NVDA add-on that addresses GitHub issues #18360, #4874 and #12996.
 This add-on adds capital letter indicators (beep, pitch change, "cap" prefix)
 when selecting single characters, matching the behavior of character navigation.
 """
@@ -16,10 +16,8 @@ import globalPluginHandler
 import textInfos
 
 import characterProcessing
-import config
 import speech
-from speech import speak, _getSpellingCharAddCapNotification
-from speech.commands import PitchCommand
+from speech import speak, getSpellingSpeech
 from speech.priorities import Spri
 from speech.types import SpeechSequence
 from synthDriverHandler import getSynth
@@ -63,7 +61,7 @@ def _getSingleCharSelectionSpeech(
 ) -> SpeechSequence:
 	"""Get speech sequence for a single selected/unselected character with capital indicators.
 
-	Uses NVDA's existing L{_getSpellingCharAddCapNotification} for seamless integration,
+	Uses NVDA's existing L{getSpellingSpeech} for seamless integration,
 	and supports template strings for translation flexibility.
 
 	:param char: The single character that was selected/unselected.
@@ -83,26 +81,7 @@ def _getSingleCharSelectionSpeech(
 		speakCharAs = characterProcessing.processSpeechSymbol(locale, char)
 		return _buildSpeechFromTemplate(messageTemplate, [speakCharAs])
 
-	synthConfig = config.conf["speech"][synth.name]
-
-	if PitchCommand in synth.supportedCommands:
-		capPitchChange = synthConfig["capPitchChange"]
-	else:
-		capPitchChange = 0
-	sayCapForCapitals = synthConfig["sayCapForCapitals"]
-	beepForCapitals = synthConfig["beepForCapitals"]
-
-	speakCharAs = characterProcessing.processSpeechSymbol(locale, char)
-	uppercase = char.isupper()
-
-	charSequence: SpeechSequence = list(
-		_getSpellingCharAddCapNotification(
-			speakCharAs,
-			uppercase and sayCapForCapitals,
-			capPitchChange if uppercase else 0,
-			uppercase and beepForCapitals,
-		)
-	)
+	charSequence = list(getSpellingSpeech(char, locale))
 
 	return _buildSpeechFromTemplate(messageTemplate, charSequence)
 

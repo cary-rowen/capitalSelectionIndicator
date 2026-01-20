@@ -5,6 +5,7 @@ A prototype NVDA add-on that implements capital letter indicators for text selec
 ## Purpose
 
 This add-on is a **proof-of-concept implementation** for:
+- [Issue #18360](https://github.com/nvaccess/nvda/issues/18360)
 - [Issue #4874](https://github.com/nvaccess/nvda/issues/4874)
 - [Issue #12996](https://github.com/nvaccess/nvda/issues/12996)
 
