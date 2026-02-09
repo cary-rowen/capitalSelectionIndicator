@@ -18,6 +18,7 @@ import textInfos
 import characterProcessing
 import speech
 from speech import speak, getSpellingSpeech
+from speech.commands import EndUtteranceCommand, CharacterModeCommand
 from speech.priorities import Spri
 from speech.types import SpeechSequence
 from synthDriverHandler import getSynth
@@ -32,26 +33,33 @@ def _buildSpeechFromTemplate(
 ) -> SpeechSequence:
 	"""Build a speech sequence by parsing a template string with %s placeholder.
 
-	This allows reusing NVDA's existing translated strings like "%s selected" or "selected %s"
-	while inserting the character sequence (with capital indicators) at the correct position.
+	Merges prefix/suffix into adjacent string items to preserve spacing.
 
 	:param template: The translated template string containing %s placeholder.
 	:param charSequence: The speech sequence for the character (with capital indicators).
-	:return: Complete speech sequence with the character inserted at the placeholder position.
+	:return: Complete speech sequence with prefix/suffix merged into string items.
 	"""
 	if "%s" not in template:
 		return list(charSequence) + [template]
 
-	before, after = template.split("%s", 1)
-	result: SpeechSequence = []
+	prefix, _, suffix = template.partition("%s")
+	seq = list(charSequence)
 
-	if before:
-		result.append(before)
-	result.extend(charSequence)
-	if after:
-		result.append(after)
+	# Merge prefix into the first string item
+	if prefix:
+		for i, item in enumerate(seq):
+			if isinstance(item, str):
+				seq[i] = prefix + item
+				break
 
-	return result
+	# Merge suffix into the last string item
+	if suffix:
+		for i in range(len(seq) - 1, -1, -1):
+			if isinstance(seq[i], str):
+				seq[i] += suffix
+				break
+
+	return seq
 
 
 def _getSingleCharSelectionSpeech(
@@ -81,7 +89,19 @@ def _getSingleCharSelectionSpeech(
 		speakCharAs = characterProcessing.processSpeechSymbol(locale, char)
 		return _buildSpeechFromTemplate(messageTemplate, [speakCharAs])
 
-	charSequence = list(getSpellingSpeech(char, locale))
+	# Build character sequence, filtering out EndUtteranceCommand to avoid speech cadence issues.
+	# Also ensure CharacterModeCommand is properly closed to prevent suffix from being spelled.
+	charSequence = []
+	charModeActive = False
+	for item in getSpellingSpeech(char, locale):
+		if isinstance(item, EndUtteranceCommand):
+			continue
+		if isinstance(item, CharacterModeCommand):
+			charModeActive = item.state
+		charSequence.append(item)
+	# Ensure CharacterModeCommand is closed at end of sequence
+	if charModeActive:
+		charSequence.append(CharacterModeCommand(False))
 
 	return _buildSpeechFromTemplate(messageTemplate, charSequence)
 
