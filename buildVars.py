@@ -25,7 +25,7 @@ addon_info = AddonInfo(
 This add-on adds capital letter indicators (beep, pitch change, "cap" prefix)
 when selecting single characters, matching the behavior of character navigation."""),
 	# version
-	addon_version="0.1.1",
+	addon_version="0.2.0",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
 	addon_changelog=_("""Initial version."""),
