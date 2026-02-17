@@ -6,137 +6,72 @@
 """Capital Letter Indicators for Text Selection.
 
 A prototype NVDA add-on that addresses GitHub issues #18360, #4874 and #12996.
-This add-on adds capital letter indicators (beep, pitch change, "cap" prefix)
-when selecting single characters, matching the behavior of character navigation.
-"""
+Routes single-character selection through getSpellingSpeech to add capital
+indicators (beep, pitch change, "cap" prefix).
 
-from typing import Optional
+Strategy: call getSpellingSpeech and strip CharacterModeCommand,
+EndUtteranceCommand and SuppressUnicodeNormalizationCommand from the result
+(since we cannot pass endsUtterance/useCharMode to the old API).
+The localized prefix/suffix from the selection template is inserted as
+independent str items so they remain outside any speech commands
+(e.g. PitchCommand for capitals).
+"""
 
 import globalPluginHandler
 import textInfos
 
-import characterProcessing
 import speech
 from speech import speak, getSpellingSpeech
-from speech.commands import EndUtteranceCommand, CharacterModeCommand
+from speech.commands import (
+	CharacterModeCommand,
+	EndUtteranceCommand,
+	SuppressUnicodeNormalizationCommand,
+)
 from speech.priorities import Spri
 from speech.types import SpeechSequence
-from synthDriverHandler import getSynth
-
 
 _originalSpeakSelectionChange = None
 
+_STRIP_COMMANDS = (CharacterModeCommand, EndUtteranceCommand, SuppressUnicodeNormalizationCommand)
 
-def _buildSpeechFromTemplate(
+
+def _getCharSelectionSeq(char: str, locale: str) -> SpeechSequence:
+	"""Get spelling speech for a single character, stripped of commands
+	that should not appear in selection announcements.
+	"""
+	return [
+		item
+		for item in getSpellingSpeech(char, locale)
+		if not isinstance(item, _STRIP_COMMANDS)
+	]
+
+
+def _speakCharSelection(
 	template: str,
-	charSequence: SpeechSequence,
-) -> SpeechSequence:
-	"""Build a speech sequence by parsing a template string with %s placeholder.
-
-	Merges prefix/suffix into adjacent string items to preserve spacing.
-
-	:param template: The translated template string containing %s placeholder.
-	:param charSequence: The speech sequence for the character (with capital indicators).
-	:return: Complete speech sequence with prefix/suffix merged into string items.
-	"""
-	if "%s" not in template:
-		return list(charSequence) + [template]
-
-	prefix, _, suffix = template.partition("%s")
-	seq = list(charSequence)
-
-	# Merge prefix into the first string item
-	if prefix:
-		for i, item in enumerate(seq):
-			if isinstance(item, str):
-				seq[i] = prefix + item
-				break
-
-	# Merge suffix into the last string item
-	if suffix:
-		for i in range(len(seq) - 1, -1, -1):
-			if isinstance(seq[i], str):
-				seq[i] += suffix
-				break
-
-	return seq
-
-
-def _getSingleCharSelectionSpeech(
 	char: str,
 	locale: str,
-	messageTemplate: Optional[str] = None,
-) -> SpeechSequence:
-	"""Get speech sequence for a single selected/unselected character with capital indicators.
-
-	Uses NVDA's existing L{getSpellingSpeech} for seamless integration,
-	and supports template strings for translation flexibility.
-
-	:param char: The single character that was selected/unselected.
-	:param locale: The locale for character processing.
-	:param messageTemplate: The translated template with %s placeholder (e.g., "%s selected").
-		If None, defaults to NVDA's existing _("%s selected") string.
-	:return: Speech sequence with capital indicators and the message.
-	"""
-	if messageTemplate is None:
-		# Translators: This is spoken to indicate what has just been selected.
-		# The text preceding 'selected' is intentional.
-		# For example 'hello world selected'
-		messageTemplate = _("%s selected")
-
-	synth = getSynth()
-	if synth is None:
-		speakCharAs = characterProcessing.processSpeechSymbol(locale, char)
-		return _buildSpeechFromTemplate(messageTemplate, [speakCharAs])
-
-	# Build character sequence, filtering out EndUtteranceCommand to avoid speech cadence issues.
-	# Also ensure CharacterModeCommand is properly closed to prevent suffix from being spelled.
-	charSequence = []
-	charModeActive = False
-	for item in getSpellingSpeech(char, locale):
-		if isinstance(item, EndUtteranceCommand):
-			continue
-		if isinstance(item, CharacterModeCommand):
-			charModeActive = item.state
-		charSequence.append(item)
-	# Ensure CharacterModeCommand is closed at end of sequence
-	if charModeActive:
-		charSequence.append(CharacterModeCommand(False))
-
-	return _buildSpeechFromTemplate(messageTemplate, charSequence)
-
-
-def _speakSingleCharSelected(
-	char: str,
-	locale: str,
-	priority: Optional[Spri] = None,
+	priority: Spri | None = None,
 ) -> None:
-	"""Speak a single selected character with capital indicators.
+	"""Speak a single-character selection/unselection with capital indicators.
 
-	:param char: The single character that was selected.
+	:param template: The translated template string containing %s placeholder
+		(e.g. "%s selected").
+	:param char: The single character.
 	:param locale: The locale for character processing.
 	:param priority: The speech priority.
 	"""
-	seq = _getSingleCharSelectionSpeech(char, locale)
-	if seq:
-		speak(seq, symbolLevel=None, priority=priority)
-
-
-def _speakSingleCharUnselected(
-	char: str,
-	locale: str,
-	priority: Optional[Spri] = None,
-) -> None:
-	"""Speak a single unselected character with capital indicators.
-
-	:param char: The single character that was unselected.
-	:param locale: The locale for character processing.
-	:param priority: The speech priority.
-	"""
-	# Translators: This is spoken to indicate what has been unselected. for example 'hello unselected'
-	seq = _getSingleCharSelectionSpeech(char, locale, messageTemplate=_("%s unselected"))
-	if seq:
-		speak(seq, symbolLevel=None, priority=priority)
+	seq = _getCharSelectionSeq(char, locale)
+	prefix, sep, suffix = template.partition("%s")
+	if not sep:
+		seq = list(seq) + [template]
+	else:
+		# Insert prefix/suffix as separate items so they remain outside any
+		# speech commands (e.g. PitchCommand for capitals).
+		if prefix:
+			seq.insert(0, prefix)
+		if suffix:
+			seq.append(suffix)
+	speak(seq, symbolLevel=None, priority=priority)
 
 
 def _patchedSpeakSelectionChange(
@@ -145,17 +80,9 @@ def _patchedSpeakSelectionChange(
 	speakSelected: bool = True,
 	speakUnselected: bool = True,
 	generalize: bool = False,
-	priority: Optional[Spri] = None,
+	priority: Spri | None = None,
 ) -> None:
-	"""Patched version of speakSelectionChange with capital letter indicators for single characters.
-
-	:param oldInfo: A TextInfo instance representing what the selection was before.
-	:param newInfo: A TextInfo instance representing what the selection is now.
-	:param speakSelected: Whether to speak selected text.
-	:param speakUnselected: Whether to speak unselected text.
-	:param generalize: If True, changes need to be spoken more generally.
-	:param priority: The speech priority.
-	"""
+	"""Patched speakSelectionChange with capital indicators for single characters."""
 	selectedTextList = []
 	unselectedTextList = []
 	if newInfo.isCollapsed and oldInfo.isCollapsed:
@@ -191,28 +118,28 @@ def _patchedSpeakSelectionChange(
 				tempInfo = oldInfo.copy()
 				tempInfo.setEndPoint(newInfo, "startToEnd")
 				unselectedTextList.append(tempInfo.text)
-
 	locale = speech.getCurrentLanguage()
-
+	# Translators: This is spoken to indicate what has just been selected.
+	selectedMsg = _("%s selected")
 	if speakSelected:
 		if not generalize:
 			for text in selectedTextList:
 				if len(text) == 1:
-					_speakSingleCharSelected(text, locale, priority=priority)
+					_speakCharSelection(selectedMsg, text, locale, priority)
 				else:
 					speech.speakTextSelected(text, priority=priority)
 		elif len(selectedTextList) > 0:
 			text = newInfo.text
 			if len(text) == 1:
-				_speakSingleCharSelected(text, locale, priority=priority)
+				_speakCharSelection(selectedMsg, text, locale, priority)
 			else:
 				speech.speakTextSelected(text, priority=priority)
-
 	if speakUnselected:
 		if not generalize:
 			for text in unselectedTextList:
 				if len(text) == 1:
-					_speakSingleCharUnselected(text, locale, priority=priority)
+					# Translators: This is spoken to indicate what has been unselected.
+					_speakCharSelection(_("%s unselected"), text, locale, priority)
 				else:
 					# Translators: This is spoken to indicate what has been unselected.
 					speech.speakSelectionMessage(_("%s unselected"), text, priority=priority)
@@ -220,7 +147,9 @@ def _patchedSpeakSelectionChange(
 			if not newInfo.isCollapsed:
 				text = newInfo.text
 				if len(text) == 1:
-					_speakSingleCharUnselected(text, locale, priority=priority)
+					# Translators: This is spoken to indicate when the previous selection
+					# was removed and a new selection was made.
+					_speakCharSelection(_("%s selected instead"), text, locale, priority)
 				else:
 					# Translators: This is spoken to indicate when the previous selection
 					# was removed and a new selection was made.
