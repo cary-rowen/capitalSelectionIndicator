@@ -25,10 +25,12 @@ addon_info = AddonInfo(
 This add-on adds capital letter indicators (beep, pitch change, "cap" prefix)
 when selecting single characters, matching the behavior of character navigation."""),
 	# version
-	addon_version="0.2.1",
+	addon_version="0.2.2",
 	# Brief changelog for this version
 	# Translators: what's new content for the add-on version to be shown in the add-on store
-	addon_changelog=_("""Initial version."""),
+	addon_changelog=_("""### 0.2.2
+
+Bump version, compatible with NVDA 2026.1.0."""),
 	# Author(s)
 	addon_author="Cary-rowen <manchen_0528@outlook.com>",
 	# URL for the add-on documentation support
@@ -40,7 +42,7 @@ when selecting single characters, matching the behavior of character navigation.
 	# Minimum NVDA version supported (e.g. "2019.3.0", minor version is optional)
 	addon_minimumNVDAVersion="2025.1.0",
 	# Last NVDA version supported/tested (e.g. "2024.4.0", ideally more recent than minimum version)
-	addon_lastTestedNVDAVersion="2025.3.2",
+	addon_lastTestedNVDAVersion="2026.1.0",
 	# Add-on update channel (default is None, denoting stable releases,
 	# and for development releases, use "dev".)
 	# Do not change unless you know what you are doing!
