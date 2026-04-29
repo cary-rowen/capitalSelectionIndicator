@@ -39,11 +39,7 @@ def _getCharSelectionSeq(char: str, locale: str) -> SpeechSequence:
 	"""Get spelling speech for a single character, stripped of commands
 	that should not appear in selection announcements.
 	"""
-	return [
-		item
-		for item in getSpellingSpeech(char, locale)
-		if not isinstance(item, _STRIP_COMMANDS)
-	]
+	return [item for item in getSpellingSpeech(char, locale) if not isinstance(item, _STRIP_COMMANDS)]
 
 
 def _speakCharSelection(
